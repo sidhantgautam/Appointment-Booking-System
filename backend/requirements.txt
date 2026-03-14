@@ -1,0 +1,33 @@
+# Web Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.25
+
+# Data Validation
+pydantic==2.5.3
+
+# AI/ML
+ollama==0.1.6
+openai-whisper==20231117
+torch==2.1.2
+torchaudio==2.1.2
+
+# Language Processing
+langdetect==1.0.9
+googletrans==4.0.0rc1
+
+# HTTP Requests
+requests==2.31.0
+
+# Audio Processing
+pydub==0.25.1
+soundfile==0.12.1
+
+# CORS
+python-jose[cryptography]==3.3.0
+
+# Environment Variables
+python-dotenv==1.0.0
