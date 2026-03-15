@@ -4,7 +4,9 @@ import {
   Languages, 
   List, 
   X,
-  Zap
+  Zap,
+  Trash2,
+  UserPlus
 } from 'lucide-react';
 
 interface QuickTestButtonsProps {
@@ -53,6 +55,30 @@ const testActions = [
     icon: X,
     color: 'bg-red-100 text-red-700 hover:bg-red-200',
   },
+  {
+    id: 'delete-all',
+    label: 'Delete All',
+    message: 'Delete all appointments for patient 1',
+    description: 'Delete all appointments for a patient',
+    icon: Trash2,
+    color: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+  },
+  {
+    id: 'create-patient',
+    label: 'Create Patient',
+    message: 'Create a new patient named Ram',
+    description: 'Create a new patient',
+    icon: UserPlus,
+    color: 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200',
+  },
+  {
+    id: 'list-patients',
+    label: 'List Patients',
+    message: 'Show all patients',
+    description: 'List all patients in the system',
+    icon: List,
+    color: 'bg-teal-100 text-teal-700 hover:bg-teal-200',
+  },
 ];
 
 export const QuickTestButtons: React.FC<QuickTestButtonsProps> = ({ 
@@ -67,7 +93,7 @@ export const QuickTestButtons: React.FC<QuickTestButtonsProps> = ({
         <span className="text-xs text-gray-500">(Demo Mode)</span>
       </div>
       
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
         {testActions.map((action) => (
           <button
             key={action.id}

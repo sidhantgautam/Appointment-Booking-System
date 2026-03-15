@@ -118,11 +118,48 @@ export const VoiceConversation: React.FC<VoiceConversationProps> = ({
       });
 
       // Add agent response
+      let agentMessage = response.agent_result.message || 
+                        response.agent_result.result?.message ||
+                        response.agent_result.error || 
+                        'No response received';
 
-      const agentMessage = response.agent_result.message || 
-                          response.agent_result.result?.message ||
-                          response.agent_result.error || 
-                          'No response received';
+      // Handle successful booking completion
+      if (response.agent_result.action === 'book_appointment' && response.agent_result.result && !response.agent_result.result.message) {
+        const result = response.agent_result.result;
+        if (result.id || result.appointment_id) {
+          agentMessage = 'Appointment booked successfully!';
+        }
+      }
+
+      // Handle booking conflicts
+      if (response.agent_result.action === 'booking_conflict' && response.agent_result.message) {
+        agentMessage = response.agent_result.message;
+      }
+
+      // Handle successful cancellation
+      if (response.agent_result.action === 'cancel_appointment' && response.agent_result.result && !response.agent_result.result.message) {
+        agentMessage = 'Appointment cancelled successfully!';
+      }
+
+      // Handle successful rescheduling
+      if (response.agent_result.action === 'reschedule_appointment' && response.agent_result.result && !response.agent_result.result.message) {
+        agentMessage = 'Appointment rescheduled successfully!';
+      }
+
+      // Handle delete all appointments
+      if (response.agent_result.action === 'delete_all_appointments' && response.agent_result.result) {
+        agentMessage = response.agent_result.result.message || 'All appointments deleted successfully!';
+      }
+
+      // Handle create patient
+      if (response.agent_result.action === 'create_patient' && response.agent_result.result) {
+        agentMessage = response.agent_result.result.message || 'Patient created successfully!';
+      }
+
+      // Handle list patients
+      if (response.agent_result.action === 'list_patients' && response.agent_result.result) {
+        agentMessage = response.agent_result.result.message || 'Patients listed successfully!';
+      }
 
       addMessage({
         type: 'agent',
@@ -177,11 +214,48 @@ export const VoiceConversation: React.FC<VoiceConversationProps> = ({
       ));
 
       // Add agent response
+      let agentMessage = response.agent_result.message || 
+                        response.agent_result.result?.message ||
+                        response.agent_result.error || 
+                        'No response received';
 
-      const agentMessage = response.agent_result.message || 
-                          response.agent_result.result?.message ||
-                          response.agent_result.error || 
-                          'No response received';
+      // Handle successful booking completion
+      if (response.agent_result.action === 'book_appointment' && response.agent_result.result && !response.agent_result.result.message) {
+        const result = response.agent_result.result;
+        if (result.id || result.appointment_id) {
+          agentMessage = 'Appointment booked successfully!';
+        }
+      }
+
+      // Handle booking conflicts
+      if (response.agent_result.action === 'booking_conflict' && response.agent_result.message) {
+        agentMessage = response.agent_result.message;
+      }
+
+      // Handle successful cancellation
+      if (response.agent_result.action === 'cancel_appointment' && response.agent_result.result && !response.agent_result.result.message) {
+        agentMessage = 'Appointment cancelled successfully!';
+      }
+
+      // Handle successful rescheduling
+      if (response.agent_result.action === 'reschedule_appointment' && response.agent_result.result && !response.agent_result.result.message) {
+        agentMessage = 'Appointment rescheduled successfully!';
+      }
+
+      // Handle delete all appointments
+      if (response.agent_result.action === 'delete_all_appointments' && response.agent_result.result) {
+        agentMessage = response.agent_result.result.message || 'All appointments deleted successfully!';
+      }
+
+      // Handle create patient
+      if (response.agent_result.action === 'create_patient' && response.agent_result.result) {
+        agentMessage = response.agent_result.result.message || 'Patient created successfully!';
+      }
+
+      // Handle list patients
+      if (response.agent_result.action === 'list_patients' && response.agent_result.result) {
+        agentMessage = response.agent_result.result.message || 'Patients listed successfully!';
+      }
 
       addMessage({
         type: 'agent',
@@ -277,6 +351,135 @@ export const VoiceConversation: React.FC<VoiceConversationProps> = ({
       );
     }
 
+
+    // Handle booking conflicts with suggested times
+    if (action === 'booking_conflict' && result && result.suggested_time) {
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-orange-700">⚠️ Time slot conflict</p>
+          <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded text-xs">
+            <div className="font-medium text-orange-800 mb-1">Alternative Available</div>
+            <div className="text-orange-700">
+              {result.message && <div>{result.message}</div>}
+              {result.suggested_time && (
+                <div className="mt-1 text-xs text-gray-600">
+                  Suggested: {new Date(result.suggested_time).toLocaleString()}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Handle successful booking with detailed confirmation
+    if (action === 'book_appointment' && result && (result.id || result.appointment_id)) {
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-green-700">✅ Appointment booked successfully!</p>
+          <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+            <div className="font-medium text-green-800 mb-1">Booking Details</div>
+            <div className="text-green-700">
+              {result.time && (
+                <div>Time: {new Date(result.time).toLocaleString()}</div>
+              )}
+              {result.patient_id && (
+                <div>Patient ID: {result.patient_id}</div>
+              )}
+              {result.doctor_id && (
+                <div>Doctor ID: {result.doctor_id}</div>
+              )}
+              {result.id && (
+                <div>Appointment ID: {result.id}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Handle successful cancellation
+    if (action === 'cancel_appointment' && result && result.appointment_id) {
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-red-700">❌ Appointment cancelled successfully!</p>
+          <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs">
+            <div className="font-medium text-red-800 mb-1">Cancellation Details</div>
+            <div className="text-red-700">
+              <div>Appointment ID: {result.appointment_id}</div>
+              {result.message && <div>{result.message}</div>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Handle successful rescheduling
+    if (action === 'reschedule_appointment' && result && result.appointment_id) {
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-blue-700">🔄 Appointment rescheduled successfully!</p>
+          <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs">
+            <div className="font-medium text-blue-800 mb-1">Reschedule Details</div>
+            <div className="text-blue-700">
+              <div>Appointment ID: {result.appointment_id}</div>
+              {result.old_time && <div>From: {new Date(result.old_time).toLocaleString()}</div>}
+              {result.new_time && <div>To: {new Date(result.new_time).toLocaleString()}</div>}
+              {result.message && <div>{result.message}</div>}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Handle successful create patient
+    if (action === 'create_patient' && result) {
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-green-700">👤 Patient created successfully!</p>
+          <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+            <div className="font-medium text-green-800 mb-1">Patient Details</div>
+            <div className="text-green-700">
+              {result.name && (
+                <div>Name: {result.name}</div>
+              )}
+              {result.id && (
+                <div>Patient ID: {result.id}</div>
+              )}
+              {result.language && (
+                <div>Language: {result.language}</div>
+              )}
+              {result.message && (
+                <div className="mt-1">{result.message}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Handle successful delete all appointments
+    if (action === 'delete_all_appointments' && result) {
+      return (
+        <div className="space-y-2">
+          <p className="text-sm font-medium text-red-700">🗑️ All appointments deleted!</p>
+          <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-xs">
+            <div className="font-medium text-red-800 mb-1">Deletion Summary</div>
+            <div className="text-red-700">
+              {result.deleted_count !== undefined && (
+                <div>Deleted: {result.deleted_count} appointment(s)</div>
+              )}
+              {result.patient_id && (
+                <div>Patient ID: {result.patient_id}</div>
+              )}
+              {result.message && (
+                <div className="mt-1">{result.message}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     if (result.formatted_list && Array.isArray(result.formatted_list)) {
       return (

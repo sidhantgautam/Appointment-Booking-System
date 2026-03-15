@@ -3,7 +3,8 @@ import re
 
 from db.db import SessionLocal
 from sqlalchemy.orm import Session
-from services import appointment_service, patient_memory_service
+from services import appointment_service
+from services import patient_service, patient_memory_service
 import models
 
 from utils.time_parser import normalize_time
@@ -94,7 +95,17 @@ def run_agent(user_text: str, session_id: str = "default"):
     
     memory = get_memory(session_id)
 
-    prompt = f"""
+    # Check if user is responding to a booking conflict suggestion
+    suggested_time = memory.get("suggested_time")
+    if suggested_time and ("yes" in user_text.lower() or "no" in user_text.lower() or "ok" in user_text.lower() or "sure" in user_text.lower()):
+        # Force intent to be booking since user is responding to booking conflict
+        intent = "book_appointment"
+        update_memory(session_id, "intent", intent)
+    else:
+        intent = memory.get("intent")
+
+    if not intent:
+        prompt = f"""
 Classify the intent of this request.
 
 Possible intents:
@@ -103,6 +114,9 @@ Possible intents:
 - reschedule_appointment
 - list_doctors
 - list_appointments
+- delete_all_appointments
+- create_patient
+- list_patients
 
 Return only the intent name.
 
@@ -110,9 +124,18 @@ Request:
 {user_text}
 """
 
-    intent = memory.get("intent")
+        response = ollama.chat(
+            model="phi3:mini",
+            options={
+                "temperature": 0,
+                "num_predict": 20
+            },
+            messages=[{"role": "user", "content": prompt}]
+        )
 
-    if not intent:
+        intent = response["message"]["content"].strip().lower()
+
+        update_memory(session_id, "intent", intent)
 
         response = ollama.chat(
             model="phi3:mini",
@@ -128,6 +151,61 @@ Request:
         update_memory(session_id, "intent", intent)
 
     if "book" in intent:
+        # Check if user is confirming a suggested time slot
+        memory = get_memory(session_id)
+        suggested_time = memory.get("suggested_time")
+        
+        if suggested_time and ("yes" in user_text.lower() or "ok" in user_text.lower() or "sure" in user_text.lower()):
+            # User confirmed the suggested time, book it directly
+            patient_id = memory.get("patient_id")
+            doctor_name = memory.get("doctor_name")
+            
+            if patient_id and doctor_name:
+                # Find the doctor
+                doctor = db.query(models.Doctor).filter(
+                    models.Doctor.name.ilike(f"%{doctor_name}%")
+                ).first()
+                
+                if doctor:
+                    # Book the suggested time
+                    result = appointment_service.book_appointment(
+                        db,
+                        patient_id=patient_id,
+                        doctor_id=doctor.id,
+                        time=suggested_time
+                    )
+                    
+                    # Clear memory after booking
+                    clear_memory(session_id)
+                    
+                    if isinstance(result, dict) and "error" in result:
+                        return {
+                            "action": "booking_conflict",
+                            "error": "Sorry, that time slot is no longer available. Please try booking again."
+                        }
+                    
+                    _save_patient_preferences(db, patient_id, session_id, {
+                        "action": "book_appointment",
+                        "result": result
+                    })
+                    
+                    return {
+                        "action": "book_appointment",
+                        "result": {
+                            "id": result.id,
+                            "patient_id": result.patient_id,
+                            "doctor_id": result.doctor_id,
+                            "time": result.time,
+                            "message": f"Appointment booked successfully for patient {result.patient_id} on {result.time}"
+                        }
+                    }
+        
+        # Check if user is declining a suggested time slot
+        if suggested_time and ("no" in user_text.lower() or "not" in user_text.lower()):
+            # Clear the suggested time and ask for a new time
+            update_memory(session_id, "suggested_time", None)
+            return {"message": "Please provide a different date and time for your appointment."}
+
         doctor_match = re.search(
             r"dr\.?\s+([a-zA-Z]+)",
             user_text,
@@ -224,7 +302,10 @@ Request:
         ).first()
 
         if not patient:
-            return {"error": f"Patient {patient_id} not found"}
+            # Suggest creating a new patient
+            return {
+                "message": f"Patient {patient_id} not found. Would you like to create a new patient? Say 'create patient [name]' to add a new patient."
+            }
 
         # date + time extraction
 
@@ -284,7 +365,10 @@ Request:
                 return {
                     "action": "booking_conflict",
                     "message": f"That time slot is already booked. The next available slot is {formatted_time}. Would you like to book that instead? (yes/no)",
-                    "suggested_time": next_slot
+                    "result": {
+                        "suggested_time": next_slot,
+                        "message": f"That time slot is already booked. The next available slot is {formatted_time}. Would you like to book that instead? (yes/no)"
+                    }
                 }
             else:
                 clear_memory(session_id)
@@ -314,7 +398,8 @@ Request:
                 "id": result.id,
                 "patient_id": result.patient_id,
                 "doctor_id": result.doctor_id,
-                "time": result.time
+                "time": result.time,
+                "message": f"Appointment booked successfully for patient {result.patient_id} on {result.time}"
             }
         }
 
@@ -604,6 +689,138 @@ Request:
                 "message": f"Found {len(appointments)} appointment(s) for patient {patient_id}:",
                 "appointments": appointments,
                 "formatted_list": appt_list
+            }
+        }
+
+    # DELETE ALL APPOINTMENTS
+    elif "delete" in intent and "all" in intent:
+        # Extract patient ID
+        patient_match = re.search(
+            r"patient\s*(\d+)",
+            user_text,
+            re.IGNORECASE
+        )
+
+        if patient_match:
+            patient_id = int(patient_match.group(1))
+            update_memory(session_id, "patient_id", patient_id)
+        
+        memory = get_memory(session_id)
+        patient_id = memory.get("patient_id")
+        
+        if not patient_id:
+            return {"message": "Which patient ID should I use to delete all appointments?"}
+        
+        # Get all appointments for patient first
+        appointments = appointment_service.get_appointments_by_patient(db, patient_id)
+        
+        if not appointments:
+            clear_memory(session_id)
+            return {
+                "action": "delete_all_appointments",
+                "result": {
+                    "message": f"No appointments found for patient {patient_id} to delete",
+                    "deleted_count": 0
+                }
+            }
+        
+        # Delete all appointments
+        deleted_count = 0
+        for appt in appointments:
+            try:
+                appointment_service.cancel_appointment(db, appt['id'])
+                deleted_count += 1
+            except Exception as e:
+                print(f"Error deleting appointment {appt['id']}: {e}")
+        
+        clear_memory(session_id)
+        
+        return {
+            "action": "delete_all_appointments",
+            "result": {
+                "message": f"Successfully deleted {deleted_count} appointment(s) for patient {patient_id}",
+                "deleted_count": deleted_count,
+                "patient_id": patient_id
+            }
+        }
+
+    # CREATE PATIENT
+    elif "create" in intent and "patient" in intent:
+        # Extract patient name
+        name_patterns = [
+            r"create\s+(?:a\s+)?(?:new\s+)?patient\s+(?:named\s+)?([a-zA-Z]+)",
+            r"add\s+(?:a\s+)?(?:new\s+)?patient\s+(?:named\s+)?([a-zA-Z]+)",
+            r"new\s+patient\s+(?:named\s+)?([a-zA-Z]+)",
+            r"patient\s+(?:named\s+)?([a-zA-Z]+)"
+        ]
+        
+        patient_name = None
+        for pattern in name_patterns:
+            name_match = re.search(pattern, user_text, re.IGNORECASE)
+            if name_match:
+                patient_name = name_match.group(1).strip().title()
+                break
+        
+        if not patient_name:
+            return {"message": "What should I name the new patient?"}
+        
+        # Check if patient with this name already exists
+        existing_patients = patient_service.get_all_patients(db)
+        for existing in existing_patients:
+            if existing.name.lower() == patient_name.lower():
+                return {
+                    "error": f"Patient named {patient_name} already exists with ID {existing.id}"
+                }
+        
+        # Create the new patient
+        try:
+            new_patient = patient_service.create_patient(
+                db, 
+                name=patient_name, 
+                language="en"  # Default to English, can be updated later
+            )
+            
+            clear_memory(session_id)
+            
+            return {
+                "action": "create_patient",
+                "result": {
+                    "id": new_patient.id,
+                    "name": new_patient.name,
+                    "language": new_patient.language,
+                    "message": f"Successfully created patient '{patient_name}' with ID {new_patient.id}"
+                }
+            }
+        except Exception as e:
+            return {
+                "action": "create_patient",
+                "error": f"Failed to create patient: {str(e)}"
+            }
+
+    # LIST PATIENTS
+    elif "list" in intent and "patient" in intent:
+        patients = patient_service.get_all_patients(db)
+        
+        if not patients:
+            return {
+                "action": "list_patients",
+                "result": {
+                    "message": "No patients found in the system",
+                    "patients": []
+                }
+            }
+        
+        # Format patient list
+        patient_list = []
+        for patient in patients:
+            patient_list.append(f"ID {patient.id}: {patient.name} ({patient.language})")
+        
+        return {
+            "action": "list_patients",
+            "result": {
+                "message": f"Found {len(patients)} patient(s):",
+                "patients": [{"id": p.id, "name": p.name, "language": p.language} for p in patients],
+                "formatted_list": patient_list
             }
         }
 

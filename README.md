@@ -59,6 +59,14 @@ npm run build
 
 ---
 
+## Architecture Diagram
+
+![Voice AI Clinic Architecture](voice_ai_clinic_architecture_diagram.png)
+
+The architecture diagram illustrates the complete system flow from user voice input through the React frontend, FastAPI backend services, AI processing pipeline, and database persistence layers.
+
+---
+
 ## Architectural Decisions
 
 ### 1. In-Memory vs Database Sessions
